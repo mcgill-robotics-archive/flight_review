@@ -18,10 +18,13 @@ parser = argparse.ArgumentParser(description='Remove old log files & DB entries'
 
 parser.add_argument('--max-age', action='store', type=int, default=30,
         help='maximum age in days (delete logs older than this, default=30)')
-parser.add_argument('--source', action='store', default='CI',
+parser.add_argument('--source', action='store',
         help='Source DB entry tag to match (empty=all, default=CI)')
 parser.add_argument('--interactive', '-i', action='store_true', default=False,
         help='Interative mode: ask whether to delete the entries')
+
+parser.add_argument('--personal-only', '-p', action='store_true', default=False,
+        help='Only prune personal logs')
 
 args = parser.parse_args()
 
@@ -29,7 +32,7 @@ args = parser.parse_args()
 max_age = args.max_age
 source = args.source
 interactive = args.interactive
-
+personal_only = args.personal_only
 
 
 con = sqlite3.connect(get_db_filename(), detect_types=sqlite3.PARSE_DECLTYPES)
@@ -38,9 +41,9 @@ with con:
     log_ids_to_remove = []
 
     if len(source) == 0:
-        cur.execute('select Id, Date, Description from Logs')
+        cur.execute('select Id, Date, Description, Type from Logs')
     else:
-        cur.execute('select Id, Date, Description from Logs where Source = ?', [source])
+        cur.execute('select Id, Date, Description, Type from Logs where Source = ?', [source])
 
     db_tuples = cur.fetchall()
     print('will delete the following:')
@@ -48,12 +51,15 @@ with con:
         log_id = db_tuple[0]
         date = db_tuple[1]
         description = db_tuple[2]
-
+        log_type = db_tuple[3]
         # check date
         elapsed_days = (datetime.datetime.now()-date).days
         if elapsed_days > max_age:
-            print('{} {} {}'.format(log_id, date.strftime('%Y_%m_%d-%H_%M'),
-                description))
+            if personal_only and log_type != 'personal':
+                continue
+
+            print('{} {} {} {}'.format(log_id, date.strftime('%Y_%m_%d-%H_%M'),
+                description, log_type))
             log_ids_to_remove.append(log_id)
 
 
@@ -67,9 +73,12 @@ with con:
         print("Will delete {:} logs out of {:}".format(len(log_ids_to_remove), num_total[0]))
 
     if interactive:
-        confirm = input('Press "y" and ENTER to confirm and delete: ')
-        if confirm != 'y':
-            print('Not deleting anything')
+        try:
+            confirm = input('Press "y" and ENTER to confirm and delete: ')
+            if confirm != 'y':
+                print('Not deleting anything')
+                exit(0)
+        except KeyboardInterrupt:
             exit(0)
 
     for log_id in log_ids_to_remove:
