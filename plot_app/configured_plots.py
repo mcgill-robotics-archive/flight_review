@@ -165,8 +165,9 @@ def generate_plots(ulog, px4_ulog, db_data, vehicle_data, link_to_3d_page):
     data_plot.change_dataset('vehicle_global_position')
     data_plot.add_graph(['alt'], colors8[2:3], ['Fused Altitude Estimation'])
     data_plot.change_dataset('position_setpoint_triplet')
-    data_plot.add_circle(['current.alt'], [plot_config['mission_setpoint_color']],
-                         ['Altitude Setpoint'])
+    data_plot.add_circle(
+        [lambda data: ('current.alt', np.max([data['current.alt'], data['current.z']], axis=0))],
+        [plot_config['mission_setpoint_color']], ['Altitude Setpoint'])
     data_plot.change_dataset('actuator_controls_0')
     data_plot.add_graph([lambda data: ('thrust', data['control[3]']*100)],
                         colors8[6:7], ['Thrust [0, 100]'])
