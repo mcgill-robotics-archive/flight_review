@@ -25,6 +25,8 @@ parser.add_argument('--interactive', '-i', action='store_true', default=False,
 
 parser.add_argument('--personal-only', '-p', action='store_true', default=False,
         help='Only prune personal logs')
+parser.add_argument('--private-only', '-s', action='store_true', default=False,
+        help='Only prune private logs')
 
 args = parser.parse_args()
 
@@ -33,6 +35,7 @@ max_age = args.max_age
 source = args.source
 interactive = args.interactive
 personal_only = args.personal_only
+private_only = args.private_only
 
 
 con = sqlite3.connect(get_db_filename(), detect_types=sqlite3.PARSE_DECLTYPES)
@@ -40,22 +43,20 @@ with con:
     cur = con.cursor()
     log_ids_to_remove = []
 
-    if len(source) == 0:
-        cur.execute('select Id, Date, Description, Type from Logs')
+    if source is None or len(source) == 0:
+        cur.execute('select Id, Date, Description, Type, Public from Logs')
     else:
-        cur.execute('select Id, Date, Description, Type from Logs where Source = ?', [source])
+        cur.execute('select Id, Date, Description, Type, Public from Logs where Source = ?', [source])
 
     db_tuples = cur.fetchall()
     print('will delete the following:')
-    for db_tuple in db_tuples:
-        log_id = db_tuple[0]
-        date = db_tuple[1]
-        description = db_tuple[2]
-        log_type = db_tuple[3]
+    for log_id, date, description, log_type, is_public in db_tuples:
         # check date
         elapsed_days = (datetime.datetime.now()-date).days
         if elapsed_days > max_age:
             if personal_only and log_type != 'personal':
+                continue
+            if private_only and is_public:
                 continue
 
             print('{} {} {} {}'.format(log_id, date.strftime('%Y_%m_%d-%H_%M'),
@@ -64,7 +65,7 @@ with con:
 
 
     if len(log_ids_to_remove) == 0:
-        print('no maches. exiting')
+        print('no matches. exiting')
         exit(0)
 
     cur.execute('select count(*) from Logs')
